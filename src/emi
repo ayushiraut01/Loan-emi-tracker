@@ -1,0 +1,131 @@
+/**
+ * EMI (Equated Monthly Instalment) calculation — reducing balance method.
+ *
+ * WHY REDUCING BALANCE:
+ * Interest each month is charged only on the principal that is STILL
+ * outstanding, not on the original loan amount. So as you repay principal,
+ * next month's interest is smaller — that's why month-1 interest is higher
+ * than month-12 interest on the same loan, even though the EMI itself is
+ * (almost always) constant.
+ *
+ * FORMULA:
+ *   EMI = P * r * (1+r)^n / ((1+r)^n - 1)
+ *   where P = principal, r = monthly interest rate (decimal), n = tenure in months
+ *
+ * ROUNDING STRATEGY:
+ * We work in whole rupees throughout (no paise, per the assignment spec).
+ * The EMI is rounded once and used for every instalment except the last.
+ * The LAST instalment is special-cased: its principal component is simply
+ * "whatever balance is left", so the loan always closes to exactly ₹0 —
+ * no leftover paise, no drift from repeated rounding.
+ */
+
+function round(n) {
+  return Math.round(n);
+}
+
+/**
+ * @param {Object} params
+ * @param {number} params.principal - loan amount in rupees (whole number, > 0)
+ * @param {number} params.tenureMonths - number of monthly instalments (integer >= 1)
+ * @param {number} [params.annualRatePercent=8] - annual interest rate, e.g. 8 for 8%
+ * @param {Date|string} [params.startDate=new Date()] - loan disbursement date;
+ *        EMI due dates are startDate + 1 month, +2 months, ...
+ * @returns {{ emi: number, schedule: Array<Object> }}
+ */
+function calculateEMISchedule({
+  principal,
+  tenureMonths,
+  annualRatePercent = 8,
+  startDate = new Date(),
+}) {
+  // --- Validation (edge cases called out in the assignment) ---
+  if (!Number.isFinite(principal) || principal <= 0) {
+    throw new Error('Principal must be a positive number.');
+  }
+  if (!Number.isInteger(tenureMonths) || tenureMonths < 1) {
+    // Covers the "zero-tenure input" edge case explicitly.
+    throw new Error('Tenure must be a whole number of at least 1 month.');
+  }
+  if (!Number.isFinite(annualRatePercent) || annualRatePercent < 0) {
+    throw new Error('Interest rate must be zero or a positive number.');
+  }
+
+  const r = annualRatePercent / 100 / 12; // monthly rate as a decimal
+  const n = tenureMonths;
+  const P = round(principal);
+
+  // Raw (unrounded) EMI from the standard formula. Guard r === 0 in case
+  // someone ever passes a 0% loan through this same function.
+  let rawEmi;
+  if (r === 0) {
+    rawEmi = P / n;
+  } else {
+    const factor = Math.pow(1 + r, n);
+    rawEmi = (P * r * factor) / (factor - 1);
+  }
+  const emi = round(rawEmi);
+
+  const schedule = [];
+  let balance = P;
+  const base = new Date(startDate);
+
+  for (let i = 1; i <= n; i++) {
+    const interestComponent = round(balance * r);
+    let principalComponent;
+    let emiThisMonth;
+
+    if (i === n) {
+      // Final instalment: close out whatever is left. This is what
+      // guarantees the schedule balances to exactly zero after rounding.
+      principalComponent = balance;
+      emiThisMonth = principalComponent + interestComponent;
+    } else {
+      principalComponent = emi - interestComponent;
+      emiThisMonth = emi;
+    }
+
+    balance = balance - principalComponent;
+
+    const dueDate = new Date(base);
+    dueDate.setMonth(dueDate.getMonth() + i);
+
+    schedule.push({
+      emiNo: i,
+      dueDate: dueDate.toISOString().slice(0, 10),
+      emiAmount: emiThisMonth,
+      principalComponent,
+      interestComponent,
+      balanceAfter: balance,
+    });
+  }
+
+  return { emi, schedule };
+}
+
+/**
+ * Foreclosure settlement: outstanding principal + the current month's
+ * interest only. All future interest is waived.
+ *
+ * @param {Array} schedule - full schedule from calculateEMISchedule
+ * @param {number} completedEmis - how many instalments have actually been paid (0..n-1)
+ * @param {number} annualRatePercent
+ * @returns {{ balanceBeforeForeclosure: number, interestForCurrentMonth: number, settlementAmount: number }}
+ */
+function calculateForeclosure(schedule, completedEmis, annualRatePercent = 8) {
+  const n = schedule.length;
+  if (!Number.isInteger(completedEmis) || completedEmis < 0 || completedEmis >= n) {
+    throw new Error(`completedEmis must be between 0 and ${n - 1}.`);
+  }
+  const r = annualRatePercent / 100 / 12;
+  const balanceBeforeForeclosure =
+    completedEmis === 0 ? schedule[0].principalComponent + schedule[0].balanceAfter // = original principal
+      : schedule[completedEmis - 1].balanceAfter;
+
+  const interestForCurrentMonth = round(balanceBeforeForeclosure * r);
+  const settlementAmount = balanceBeforeForeclosure + interestForCurrentMonth;
+
+  return { balanceBeforeForeclosure, interestForCurrentMonth, settlementAmount };
+}
+
+module.exports = { calculateEMISchedule, calculateForeclosure };
