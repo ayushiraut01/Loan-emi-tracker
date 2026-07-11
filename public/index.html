@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Loan EMI Tracker</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<!-- ================= LOGIN SCREEN ================= -->
+<section id="login-screen" class="screen">
+  <div class="login-card">
+    <div class="brand">
+      <span class="brand-mark">₹</span>
+      <h1>Loan EMI Tracker</h1>
+    </div>
+    <p class="muted">Sign in to manage members and loans.</p>
+    <form id="login-form">
+      <label>Username
+        <input type="text" id="login-username" value="admin" autocomplete="username" required />
+      </label>
+      <label>Password
+        <input type="password" id="login-password" value="admin123" autocomplete="current-password" required />
+      </label>
+      <button type="submit" class="btn btn-primary btn-block">Log in</button>
+      <p class="error" id="login-error"></p>
+    </form>
+    <p class="hint">Demo credentials are pre-filled: <code>admin / admin123</code></p>
+  </div>
+</section>
+
+<!-- ================= APP SHELL ================= -->
+<section id="app-shell" class="screen hidden">
+  <header class="topbar">
+    <div class="brand brand-small">
+      <span class="brand-mark">₹</span>
+      <span>Loan EMI Tracker</span>
+    </div>
+    <nav class="tabs">
+      <button class="tab-btn active" data-tab="members">Members</button>
+      <button class="tab-btn" data-tab="loans">Loans</button>
+      <button class="tab-btn" data-tab="report">Report</button>
+    </nav>
+    <button id="logout-btn" class="btn btn-ghost">Log out</button>
+  </header>
+
+  <main class="content">
+
+    <!-- ---------- MEMBERS TAB ---------- -->
+    <section id="tab-members" class="tab-panel active">
+      <div class="panel-header">
+        <h2>Members</h2>
+        <button class="btn btn-primary" id="show-add-member">+ Add member</button>
+      </div>
+
+      <form id="add-member-form" class="inline-form hidden">
+        <label>Name <input type="text" id="member-name" required placeholder="e.g. Priya Sharma" /></label>
+        <label>Member ID <input type="text" id="member-code" required placeholder="e.g. EMP-004" /></label>
+        <label>Monthly salary (₹) <input type="number" id="member-salary" required min="1" placeholder="e.g. 45000" /></label>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">Save member</button>
+          <button type="button" class="btn btn-ghost" id="cancel-add-member">Cancel</button>
+        </div>
+        <p class="error" id="member-error"></p>
+      </form>
+
+      <table class="data-table">
+        <thead>
+          <tr><th>Name</th><th>Member ID</th><th>Monthly salary</th></tr>
+        </thead>
+        <tbody id="members-tbody"></tbody>
+      </table>
+      <p class="empty-state hidden" id="members-empty">No members yet. Add your first member above.</p>
+    </section>
+
+    <!-- ---------- LOANS TAB ---------- -->
+    <section id="tab-loans" class="tab-panel">
+      <div class="panel-header">
+        <h2>Loans</h2>
+        <button class="btn btn-primary" id="show-add-loan">+ New loan</button>
+      </div>
+
+      <form id="add-loan-form" class="inline-form hidden">
+        <label>Member
+          <select id="loan-member" required></select>
+        </label>
+        <label>Principal (₹) <input type="number" id="loan-principal" required min="1" placeholder="e.g. 100000" /></label>
+        <label>Tenure (months) <input type="number" id="loan-tenure" required min="1" step="1" placeholder="e.g. 12" /></label>
+        <label>Interest rate <input type="text" value="8% p.a., reducing balance" disabled /></label>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">Create loan</button>
+          <button type="button" class="btn btn-ghost" id="cancel-add-loan">Cancel</button>
+        </div>
+        <p class="error" id="loan-error"></p>
+      </form>
+
+      <table class="data-table">
+        <thead>
+          <tr><th>Member</th><th>Principal</th><th>Tenure</th><th>EMI</th><th>Outstanding</th><th>Status</th><th></th></tr>
+        </thead>
+        <tbody id="loans-tbody"></tbody>
+      </table>
+      <p class="empty-state hidden" id="loans-empty">No loans yet. Create one above.</p>
+    </section>
+
+    <!-- ---------- LOAN DETAIL TAB (hidden from nav, opened from Loans list) ---------- -->
+    <section id="tab-loan-detail" class="tab-panel">
+      <button class="btn btn-ghost" id="back-to-loans">&larr; Back to loans</button>
+      <div id="loan-detail-header"></div>
+      <table class="data-table">
+        <thead>
+          <tr><th>EMI #</th><th>Due date</th><th>EMI amount</th><th>Principal</th><th>Interest</th><th>Balance after</th></tr>
+        </thead>
+        <tbody id="schedule-tbody"></tbody>
+      </table>
+    </section>
+
+    <!-- ---------- REPORT TAB ---------- -->
+    <section id="tab-report" class="tab-panel">
+      <div class="panel-header">
+        <h2>Member-wise outstanding</h2>
+        <a class="btn btn-primary" id="export-csv-btn" href="#">Export to CSV</a>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr><th>Member</th><th>Member ID</th><th>Active loans</th><th>Total outstanding</th></tr>
+        </thead>
+        <tbody id="report-tbody"></tbody>
+      </table>
+    </section>
+
+  </main>
+</section>
+
+<!-- ================= FORECLOSE MODAL ================= -->
+<div id="foreclose-modal" class="modal-backdrop hidden">
+  <div class="modal">
+    <h3>Foreclose loan</h3>
+    <p class="muted">Settlement = outstanding principal + this month's interest only. All future interest is waived.</p>
+    <label>Instalments already paid
+      <input type="number" id="foreclose-completed" min="0" value="0" />
+    </label>
+    <p class="error" id="foreclose-error"></p>
+    <div class="form-actions">
+      <button class="btn btn-primary" id="confirm-foreclose">Confirm foreclosure</button>
+      <button class="btn btn-ghost" id="cancel-foreclose">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
